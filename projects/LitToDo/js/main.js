@@ -6,46 +6,87 @@ export class ToDoList extends LitElement {
         {
             name: String,
             description: String,
-            completed: Boolean
+            completed: Boolean,
+            id: String
         }
     }
 
     constructor() {
         super();
-        this.items = [
-            {
-                name: 'test',
-                description: 'test description',
-                completed: false
-            },
-            {
-                name: 'test 2',
-                description: 'test description 2',
-                completed: true
-            },
-        ]
-
+        this.loadItemsFromLocalStorage();
         this.addEventListener('addedItem', (e) => this.addItem(e.detail))
+        this.addEventListener('removedItem', (e) => this.removeItem(e.detail.id))
+        this.addEventListener('updatedItem', (e) => this.updateItem(e.detail))
+    }
+
+    loadItemsFromLocalStorage()
+    {
+        let litToDoItems = localStorage.getItem('lit-to-do-items');
+        if (litToDoItems)
+        {
+            this.items = JSON.parse(litToDoItems);
+            return;
+        }
+
+        this.items = [];
+    }
+
+    saveItemsToLocalStorage()
+    {
+        let itemsSerialized = JSON.stringify(this.items);
+        localStorage.setItem('lit-to-do-items', itemsSerialized);
+    }
+
+    removeItem(id)
+    {
+        const newItems = [];
+        this.items.forEach(item => {
+            if (item.id !== id)
+            {
+                newItems.push(item);
+            }
+        })
+
+        this.items = newItems;
+        this.saveItemsToLocalStorage();
     }
 
     addItem(item)
     {
-        console.log(item);
         this.items = [
             ...this.items,
             {
                 name: item.name,
                 description: item.description,
-                completed: false
+                completed: false,
+                id: self.crypto.randomUUID()
             }
         ];
+
+        this.saveItemsToLocalStorage();
+    }
+
+    updateItem(updatedItem)
+    {
+        console.log(updatedItem);
+        const newItems = [];
+        this.items.forEach(item => {
+            if (item.id == updatedItem.id)
+            {
+                item.completed = updatedItem.completed
+            };
+            newItems.push(item);
+        })
+
+        this.items = newItems;
+        this.saveItemsToLocalStorage();
     }
 
     render() {
         return html`
         <ul>
             ${this.items.map((item) =>
-                html`<to-do-list-item .name=${item.name} .description=${item.description} .completed=${item.completed}></to-do-list-item>`
+                html`<to-do-list-item .item=${item}></to-do-list-item>`
             )}
         </ul>
         <to-do-list-item-input></to-do-list-item-input>
@@ -67,8 +108,8 @@ export class ToDoListItemInput extends LitElement {
     addItem() {
         const options = {
             detail: {
-                name: this.getName(),
-                description: this.getDescription()
+                name: this.getNameInput().value,
+                description: this.getDescriptionInput().value
             },
             bubbles: true,
             composed: true
@@ -78,14 +119,6 @@ export class ToDoListItemInput extends LitElement {
 
         this.getNameInput().value = '';
         this.getDescriptionInput().value = '';
-    }
-
-    getName() {
-        return this.getNameInput().value;
-    }
-
-    getDescription() {
-        return this.getDescriptionInput().value;
     }
 
     getNameInput() {
@@ -107,20 +140,50 @@ export class ToDoListItemInput extends LitElement {
 
 export class ToDoListItem extends LitElement {
     static properties = {
-        name: '',
-        description: '',
-        completed: { type: Boolean }
+        item: {
+            name: { type: String },
+            description: { type: String },
+            completed: { type: Boolean },
+            id: { type: String }
+        }
     }
 
     constructor() {
         super();
     }
 
+    // dispatch remove item event
+    removeItem() {
+        const options = {
+            detail: {
+                id: this.item.id
+            },
+            bubbles: true,
+            composed: true
+        }
+        const event = new CustomEvent('removedItem', options);
+        this.dispatchEvent(event);
+    }
+
+    updateItem() {
+        const options = {
+            detail: {
+                id: this.item.id,
+                completed: !this.item.completed
+            },
+            bubbles: true,
+            composed: true
+        }
+        const event = new CustomEvent('updatedItem', options);
+        this.dispatchEvent(event);
+    }
+
     render() {
         return html`
         <li>
-            <input type="checkbox" ?checked=${this.completed} />
-            ${this.name} - ${this.description}
+            <input type="checkbox" ?checked=${this.item.completed} @click=${this.updateItem}/>
+            ${this.item.name} - ${this.item.description}
+            <input type="button" value="Remove Item" @click=${this.removeItem}>
         </li>
         `
     }
